@@ -1,0 +1,105 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg
+*.egg-info/
+dist/
+build/
+*.pyo
+*.pyd
+*.so
+*.sqlite3
+*.db
+*.log
+*.pot
+*.mo
+*.env
+.env*
+.venv/
+venv/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# VS Code
+.vscode/
+
+# Data and results
+*.csv
+*.tsv
+*.parquet
+*.h5
+*.xlsx
+*.xls
+*.npy
+*.npz
+*.pkl
+*.joblib
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+*.zip
+*.tar.gz
+*.tar
+*.gz
+*.bz2
+*.7z
+*.rar
+*.out
+*.tmp
+*.bak
+*.swp
+
+# PyTorch Lightning logs
+lightning_logs/
+tb_logs/
+*.ckpt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test and coverage
+.coverage
+htmlcov/
+*.cover
+*.py,cover
+.cache/
+
+# Others
+*.log
+*.pot
+*.mo
+*.pid
+*.seed
+*.stats
+*.dat
+*.out
+*.tmp
+*.bak
+*.swp
+
+# Ignore LICENSE and README.md
+!LICENSE
+!README.md
+/data/
+
+# Node / Next.js
+node_modules/
+.next/
+next-env.d.ts
+tsconfig.tsbuildinfo
