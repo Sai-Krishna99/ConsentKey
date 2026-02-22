@@ -9,11 +9,15 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "dagre": "^0.8.5",
+    "html-to-image": "^1.11.13",
     "next": "^14.2.35",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "reactflow": "^11.11.4"
   },
   "devDependencies": {
+    "@types/dagre": "^0.7.53",
     "@types/node": "20.17.24",
     "@types/react": "18.3.20",
     "@types/react-dom": "18.3.6",

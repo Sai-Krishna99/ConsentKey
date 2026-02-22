@@ -1,3 +1,5 @@
+@import "reactflow/dist/style.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -31,4 +33,14 @@ body {
 
 .mono {
   font-family: var(--font-plex-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@keyframes consentDashFlow {
+  from {
+    stroke-dashoffset: 0;
+  }
+
+  to {
+    stroke-dashoffset: -20;
+  }
 }
