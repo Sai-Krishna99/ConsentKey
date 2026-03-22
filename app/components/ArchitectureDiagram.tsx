@@ -165,9 +165,9 @@ export default function ArchitectureDiagram() {
     },
     {
       id: "device",
-      title: "Logitech Trust Surface",
-      subtitle: "MX Console captures deliberate intent",
-      items: ["Consent card UI", "Haptics encode risk", "Gesture = approve / deny"],
+      title: "Console + Ring Trust Surface",
+      subtitle: "MX Creative Console captures deliberate intent",
+      items: ["Consent card UI", "Actions Ring overlay", "Approve / deny / hold gestures"],
       x: 1068,
       y: 106,
       w: 300,
@@ -194,10 +194,12 @@ export default function ArchitectureDiagram() {
       <div className="flex items-end justify-between gap-4">
         <div>
           <div className="text-xs tracking-[0.25em] text-white/60">CONSENTKEY ARCHITECTURE</div>
-          <div className="mt-2 text-2xl font-semibold text-white">Physical consent firewall for AI actions</div>
+          <div className="mt-2 text-2xl font-semibold text-white">
+            MX Creative Console + Actions Ring consent firewall
+          </div>
           <div className="mt-1 text-sm text-white/70">
-            Agent proposes action, broker evaluates risk, human approves on Logitech device, then execution is
-            allowed or blocked.
+            Agent proposes action, broker evaluates risk, human approves on MX Creative Console and Actions
+            Ring, then execution is allowed or blocked.
           </div>
         </div>
       </div>
@@ -215,7 +217,7 @@ export default function ArchitectureDiagram() {
 
           <Arrow x1={312} y1={164} x2={350} y2={164} label="proposed action" />
           <Arrow x1={640} y1={164} x2={678} y2={164} label="request" />
-          <Arrow x1={1028} y1={154} x2={1068} y2={154} label="consent UI" />
+          <Arrow x1={1028} y1={154} x2={1068} y2={154} label="console + ring UI" />
           <Arrow x1={1068} y1={266} x2={1028} y2={322} label="approve / deny" />
           <Arrow x1={860} y1={370} x2={730} y2={448} label="token or 403" />
 

@@ -203,6 +203,8 @@ export default function HomePage() {
   const terminalIdRef = useRef<number>(2);
   const terminalTimersRef = useRef<number[]>([]);
   const pendingUnlockTimerRef = useRef<number | null>(null);
+  const lastBrokerStatusRef = useRef<string>("idle");
+  const lastBrokerRequestIdRef = useRef<string | null>(null);
 
   const selectedScenario = useMemo(
     () => SCENARIOS.find((scenario) => scenario.id === selectedId) ?? SCENARIOS[0],
@@ -283,6 +285,82 @@ export default function HomePage() {
     return () => clearInterval(timer);
   }, []);
 
+  // Poll broker state so hardware button presses update the UI in real time
+  useEffect(() => {
+    let active = true;
+    const poll = async () => {
+      try {
+        const res = await fetch("/api/consent/state");
+        if (!res.ok || !active) return;
+        const snap = await res.json();
+        const prevStatus = lastBrokerStatusRef.current;
+        const prevReqId = lastBrokerRequestIdRef.current;
+        const nextStatus: BrokerStatus = snap.status;
+        const nextReqId: string | null = snap.activeRequest?.requestId ?? null;
+
+        // Only react to actual state transitions
+        if (nextStatus === prevStatus && nextReqId === prevReqId) return;
+        lastBrokerStatusRef.current = nextStatus;
+        lastBrokerRequestIdRef.current = nextReqId;
+
+        if (nextStatus === "awaiting" && snap.activeRequest) {
+          const req = snap.activeRequest;
+          const matchedScenario = SCENARIOS.find((s) => s.id === req.scenarioId);
+          if (matchedScenario) {
+            setSelectedId(matchedScenario.id);
+          }
+          setStatus("awaiting");
+          setToken("");
+          setReason("");
+          setActionHash(req.actionHash ?? "");
+          setPendingLock(false);
+          setHoldProgress(0);
+          clearTerminalTimers();
+          terminalIdRef.current = 1;
+          setTerminalLines([{ id: 1, text: `$ ${req.command}`, tone: "info" }]);
+          queueTerminalLines([
+            { text: `-> Consent request from ${req.source ?? "plugin"}`, tone: "info", delayMs: 200 },
+            { text: `-> Risk=${req.risk} Policy=${req.policyId ?? "unknown"}`, tone: "info", delayMs: 280 },
+            { text: "-> Awaiting human gesture on MX Console...", tone: "info", delayMs: 240 }
+          ]);
+        } else if (nextStatus === "approved" && snap.lastDecision) {
+          const decision = snap.lastDecision;
+          setStatus("approved");
+          setHoldProgress(100);
+          const issuedToken = decision.token ?? "";
+          setToken(issuedToken);
+          setPendingLock(false);
+          queueTerminalLines([
+            { text: `-> Approved via ${decision.surface ?? "device"}.`, tone: "success", delayMs: 200 },
+            { text: `-> Token: ${issuedToken}`, tone: "success", delayMs: 280 },
+            { text: "-> Executing command in approved window...", tone: "success", delayMs: 240 }
+          ]);
+        } else if (nextStatus === "blocked" && snap.lastDecision) {
+          const decision = snap.lastDecision;
+          setStatus("blocked");
+          setToken("");
+          setHoldProgress(0);
+          setPendingLock(false);
+          queueTerminalLines([
+            { text: `-> Denied via ${decision.surface ?? "device"}.${decision.reason ? ` Reason: ${decision.reason}` : ""}`, tone: "error", delayMs: 200 },
+            { text: "-> 403 Consent Required", tone: "error", delayMs: 280 }
+          ]);
+        } else if (nextStatus === "idle" && prevStatus !== "idle") {
+          setStatus("idle");
+          setToken("");
+          setActionHash("");
+          setHoldProgress(0);
+          setPendingLock(false);
+        }
+      } catch {
+        // Broker not reachable — silently ignore
+      }
+    };
+    const interval = setInterval(poll, 600);
+    poll();
+    return () => { active = false; clearInterval(interval); };
+  }, []);
+
   useEffect(() => {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -301,18 +379,24 @@ export default function HomePage() {
 
   function approveAction(): void {
     if (status !== "awaiting" || pendingLock) return;
-    clearPendingUnlockTimer();
-    setPendingLock(false);
-    setStatus("approved");
-    setHoldProgress(100);
-    const issuedToken = buildToken(shownHash);
-    setToken(issuedToken);
-    queueTerminalLines([
-      { text: "-> Approval captured from MX Console.", tone: "success", delayMs: 220 },
-      { text: `-> Approval token received: ${issuedToken}`, tone: "success", delayMs: 320 },
-      { text: "-> Executing command in approved window...", tone: "success", delayMs: 260 }
-    ]);
     stopHold(false);
+    // Fire the broker API — polling will pick up the state change
+    fetch("/api/consent/state")
+      .then((r) => r.json())
+      .then((snap) => {
+        const reqId = snap.activeRequest?.requestId;
+        if (!reqId) return;
+        fetch("/api/consent/approve", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            requestId: reqId,
+            surface: "ui",
+            reason: reason || undefined
+          })
+        });
+      })
+      .catch(() => {});
   }
 
   function handleStartHold(): void {
@@ -352,27 +436,12 @@ export default function HomePage() {
   function startRequestForScenario(scenario: Scenario): void {
     stopHold(true);
     clearPendingUnlockTimer();
-    armPendingLock(1200);
-    setStatus("awaiting");
-    setSelectedId(scenario.id);
-    setToken("");
-    setReason("");
-    const requestedHash = buildHash(
-      `${scenario.command}|${scenario.policyId}|${Date.now().toString()}`
-    );
-    setActionHash(requestedHash);
-    clearTerminalTimers();
-    terminalIdRef.current = 1;
-    setTerminalLines([{ id: 1, text: `$ ${scenario.command}`, tone: "info" }]);
-    queueTerminalLines([
-      { text: "-> Requesting ConsentKey approval...", tone: "info", delayMs: 260 },
-      {
-        text: `-> Risk=${scenario.risk} Policy=${scenario.policyId}`,
-        tone: "info",
-        delayMs: 320
-      },
-      { text: "-> Awaiting human gesture on MX Console...", tone: "info", delayMs: 260 }
-    ]);
+    // Fire the broker API — polling will pick up the state change
+    fetch("/api/consent/request", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ scenarioId: scenario.id, requestedBy: "ui-operator", source: "ui" })
+    }).catch(() => {});
   }
 
   function triggerLowRiskPass(): void {
@@ -385,13 +454,19 @@ export default function HomePage() {
     if (status !== "awaiting" || pendingLock) return;
     stopHold(true);
     clearPendingUnlockTimer();
-    setPendingLock(false);
-    setStatus("blocked");
-    setToken("");
-    queueTerminalLines([
-      { text: "-> Consent denied by operator.", tone: "error", delayMs: 220 },
-      { text: "-> 403 Consent Required", tone: "error", delayMs: 300 }
-    ]);
+    // Fire the broker API — polling will pick up the state change
+    fetch("/api/consent/state")
+      .then((r) => r.json())
+      .then((snap) => {
+        const reqId = snap.activeRequest?.requestId;
+        if (!reqId) return;
+        fetch("/api/consent/deny", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ requestId: reqId, surface: "ui", reason: "Denied by operator" })
+        });
+      })
+      .catch(() => {});
   }
 
   function switchScenario(nextId: string): void {
@@ -415,10 +490,10 @@ export default function HomePage() {
             <p className="text-xs uppercase tracking-[0.28em] text-cyan-200/70">MX Creative Console</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">ConsentKey</h1>
             <p className="mt-1 text-sm text-slate-300">
-              Physical human-consent gate for high-risk AI actions
+              Physical human-consent gate for high-risk AI actions on MX Creative Console and Actions Ring
             </p>
             <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-400">
-              Incident mode: long session
+              Incident mode: long session / mouse extension later
             </p>
           </div>
           <button
@@ -494,7 +569,7 @@ export default function HomePage() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h2 className="text-2xl font-semibold tracking-tight text-white">ConsentKey</h2>
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-300">MX Console</p>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-300">MX Creative Console + Actions Ring</p>
                   </div>
                   <div className="flex items-center gap-2">
                     {status === "awaiting" && (

@@ -98,8 +98,8 @@ const RAW_NODES: Array<Node<DiagramNodeData>> = [
     id: "device",
     type: "consentNode",
     data: {
-      title: "Logitech Trust Surface",
-      subtitle: "MX Console consent UI, haptics, gesture",
+      title: "Console + Ring Trust Surface",
+      subtitle: "MX Creative Console UI, Actions Ring, approval gesture",
       category: "device"
     },
     position: { x: 0, y: 0 }

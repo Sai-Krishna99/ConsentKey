@@ -17,11 +17,11 @@ export default function ArchitecturePage() {
         <div>
           <div className="text-xs tracking-[0.25em] text-white/60">CONSENTKEY ARCHITECTURE</div>
           <h1 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">
-            Physical consent firewall for AI actions
+            MX Creative Console + Actions Ring consent firewall for AI actions
           </h1>
           <p className="mt-2 max-w-4xl text-sm text-white/70 sm:text-base">
-            Agent proposes -&gt; broker evaluates risk -&gt; consent on MX Console -&gt; token allows
-            execution (or 403 blocks).
+            Agent proposes -&gt; broker evaluates risk -&gt; consent appears on MX Creative Console and
+            Actions Ring -&gt; token allows execution (or 403 blocks).
           </p>
         </div>
 

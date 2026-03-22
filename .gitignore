@@ -103,3 +103,16 @@ node_modules/
 .next/
 next-env.d.ts
 tsconfig.tsbuildinfo
+
+# Logitech Actions SDK / Windows wrapper artifacts
+plugins/consentkey-actions-windows/node_modules/
+plugins/consentkey-actions-windows/dist/
+plugins/consentkey-actions-windows/.tmp/
+plugins/consentkey-actions-windows/.cache/
+plugins/consentkey-actions-windows/*.link
+plugins/consentkey-actions-windows/*.lplug4
+plugins/consentkey-actions-windows/*.log
+
+# Allow plugin assets that would otherwise be caught by blanket media rules above
+!plugins/**/*.svg
+!plugins/**/*.png
