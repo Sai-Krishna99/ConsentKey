@@ -1,33 +1,35 @@
-# ConsentKey Actions SDK Source
+# ConsentKey Actions - shared source
 
-This folder contains the first-pass Logitech Actions SDK source for the console-first ConsentKey flow.
+This folder is the cross-platform reference copy of the Logitech Actions SDK source for ConsentKey.
 
-Current scope:
-- `MX Creative Console` is the primary hardware surface
-- `Actions Ring` is the contextual on-screen surface
-- `MX Master 4` is intentionally treated as a future extension
+The Windows-native build lives in `../consentkey-actions-windows/` and is what actually gets linked into `LogiPluginService`. That folder contains its own `src/` with the same files; keep them in sync when editing.
 
-Important constraints:
-- Logitech's Node.js Actions SDK is currently documented as `Windows-only` during alpha
-- The recommended setup flow is to generate the base plugin with:
+## Scope
 
-```bash
-npx @logitech/plugin-toolkit create consentkey-actions-windows
-```
+Current ConsentKey surfaces:
+- `MX Creative Console` - primary physical trust surface
+- `Actions Ring` - contextual on-screen approval surface
+- `MX Master 4` - future extension
 
-Then place that generated wrapper project in `plugins/consentkey-actions-windows/`, copy the `src/` files from this folder into the wrapper project, and install the SDK dependencies there.
+## Actions
 
-Expected local broker:
-- The plugin actions call the local Next.js consent broker exposed by this repo:
-  - `GET /api/consent/state`
-  - `POST /api/consent/request`
-  - `POST /api/consent/approve`
-  - `POST /api/consent/deny`
+| Action id | Purpose |
+| --- | --- |
+| `RequestHighRiskConsent` | Submit a HIGH-risk consent request (restart auth-service scenario) |
+| `RequestCriticalConsent` | Submit a CRITICAL consent request (rotate secret + restart scenario) |
+| `ApprovePendingConsent` | Approve the currently-pending request, tagged with `surface: "mx-creative-console"` |
+| `DenyPendingConsent` | Deny the currently-pending request with reason `"Denied from MX Creative Console"` |
 
-Recommended first demo flow:
-1. Assign `Request HIGH Consent` to an MX Creative Console key.
-2. Assign `Approve Pending Consent` to a second key or an Actions Ring slot.
-3. Assign `Deny Pending Consent` to a third key or an Actions Ring slot.
-4. Run the Next app locally and verify the plugin can create and resolve requests against `localhost:3000`.
+## Broker
 
-The code here assumes the SDK exposes `PluginSDK`, `CommandAction`, and `sdk.registerAction(...)`, which matches Logitech's published Node.js API docs.
+Each action uses `ConsentBrokerClient` to call the local Next.js broker:
+- `GET  /api/consent/state`
+- `POST /api/consent/request`
+- `POST /api/consent/approve`
+- `POST /api/consent/deny`
+
+Base URL defaults to `http://127.0.0.1:3000`, overridable via `CONSENTKEY_BROKER_URL`.
+
+## Editing
+
+If you change anything under `src/`, mirror the same change under `../consentkey-actions-windows/src/` and rebuild the wrapper with `npm run build` from that folder.

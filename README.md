@@ -1,73 +1,111 @@
 # ConsentKey
-ConsentKey is a software layer that turns the MX Creative Console and Actions Ring into human-intent control points for AI systems, with MX Master 4 planned as a future extension.
 
-## UI Mock (Hackathon Demo)
-This repo now includes a local Next.js + Tailwind UI mock for the ConsentKey console-first approval flow built around MX Creative Console and Actions Ring.
+ConsentKey is a physical consent firewall for high-risk AI actions. It turns the MX Creative Console and Actions Ring into human-intent control points that sit between AI agents and the execution layer.
 
-### Run locally
+Core idea:
+- AI coding agents move fast
+- production systems are fragile
+- risky actions should require verified human intent before execution
+
+Current implementation surfaces:
+- `MX Creative Console` - primary physical trust surface
+- `Actions Ring` - contextual on-screen approval surface
+- `MX Master 4` - planned future extension
+
+## What is in this repo
+
+- `app/` - Next.js demo UI and local consent broker API
+- `lib/` - shared consent model and in-memory broker
+- `plugins/consentkey-actions/` - shared Logitech Actions SDK source (cross-platform reference)
+- `plugins/consentkey-actions-windows/` - Windows-native Logitech plugin wrapper (`logitoolkit`-buildable)
+- `agents/` - `consent-run` CLI: the agent-side wrapper that the broker gates
+- `demo_script.md` - final submission script (Sai + Ankit)
+
+## End-to-end flow
+
+1. An agent wraps its risky command with `consent-run`, e.g. `consent-run kubectl rollout restart deploy/auth-service -n prod`.
+2. ConsentKey's broker classifies the risk and pauses execution. The CLI blocks, polling broker state.
+3. The pending request is surfaced to the operator through the MX Creative Console and Actions Ring.
+4. The operator approves or denies on hardware:
+   - **Deny** - request is blocked, CLI exits with `403 Consent Required` (exit 1).
+   - **Approve** - broker issues a short-lived approval token; CLI executes in the approved window and exits 0.
+
+Every hardware decision is tagged `surface: "mx-creative-console"` in the broker's audit record, so device-originated approvals are distinguishable from UI- or API-originated ones.
+
+Scenarios wired in code:
+- `LOW` - safe preview / diff (single-tap approve)
+- `HIGH` - restart auth-service (hold-to-approve ~1.2s)
+- `CRITICAL` - rotate secret + restart (reason required on UI surface, hold-to-approve ~1.8s)
+
+## Running the demo
+
+### 1. Install prerequisites (Windows)
+
+- Node.js >= 22 (the plugin wrapper pins `node >= 22.0.0`)
+- Logi Options+ (includes `LogiPluginService`)
+
+### 2. Start the broker + UI
+
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
-Open `http://localhost:3000`.
+Open `http://localhost:3000`. The UI polls `/api/consent/state` every 600ms and reflects broker transitions in real time.
 
-### Demo behavior included
-- Presenter-first screen (clean device view) with toggleable `Operator Mode`
-- Scenario selector for LOW / HIGH / CRITICAL actions
-- Consent broker states: idle, awaiting consent, blocked (403), approved (token issued)
-- Built-in mock agent terminal stream showing request, `403`, and token handoff lines
-- Pending dwell window (~1.2s) before deny/approve is allowed, to emphasize human pause
-- Console-first consent interaction designed to map onto Actions Ring and MX Creative Console inputs
-- Risk-calibrated approvals:
-  - LOW: single-click approve
-  - HIGH: hold-to-approve (~1.2s)
-  - CRITICAL: reason required (min 8 chars) + hold-to-approve (~1.8s)
+Sanity-check endpoints:
+- `GET  /api/consent/state`
+- `GET  /api/consent/scenarios`
+- `POST /api/consent/request` `{scenarioId, requestedBy, source}`
+- `POST /api/consent/approve` `{requestId, surface, reason?}`
+- `POST /api/consent/deny` `{requestId, surface, reason?}`
 
-## Local Broker API
-The app now exposes a local consent broker API for Logitech integration work:
+### 3. Build and link the Logitech plugin
 
-- `GET /api/consent/scenarios`
-- `GET /api/consent/state`
-- `POST /api/consent/request`
-- `POST /api/consent/approve`
-- `POST /api/consent/deny`
+```bash
+cd plugins/consentkey-actions-windows
+npm ci
+npm run build
+npm run link
+```
 
-This gives the Actions SDK plugin a real contract to call instead of relying only on UI-local demo state.
+`npm run link` runs `logitoolkit link`, which creates a symlink at
+`%LOCALAPPDATA%\Logi\LogiPluginService\plugins\ConsentKeyActions` -> this folder's `dist/`
+and triggers the Logi runtime to reload the plugin. Confirm load in:
+`%LOCALAPPDATA%\Logi\LogiPluginService\logs\plugin_logs\ConsentKeyActions.log`
 
-## Actions SDK Implementation
-The repository now includes a first-pass Logitech plugin source scaffold in `plugins/consentkey-actions`.
+### 4. Bind actions on MX Creative Console
 
-Current intent:
-- `MX Creative Console` and `Actions Ring` are the primary implementation surfaces
-- `MX Master 4` remains a later extension
+In Logi Options+, the four ConsentKey actions appear under the ConsentKey plugin:
+- `Request high-risk consent`
+- `Request critical consent`
+- `Approve pending consent`
+- `Deny pending consent`
 
-Important note:
-- Logitech's published Node.js Actions SDK docs currently describe the SDK as `Windows-only` during alpha, so the plugin portion should be developed and tested on Windows with the official toolkit-generated wrapper project.
+Map each to a key on the MX Creative Console. Pressing them will POST to `http://127.0.0.1:3000` and both the UI and any running `consent-run` CLI will react live.
 
-## Repo Layout
-- `app/` - Next.js demo UI and local broker API
-- `lib/` - shared consent broker model and server-side logic
-- `plugins/consentkey-actions/` - shared Actions SDK source we own
-- `plugins/consentkey-actions-windows/` - Windows-only toolkit wrapper project for Logitech runtime testing
+### 5. Run the agent-side CLI
 
-## Cross-Platform Workflow
-Keep this as a single repo.
+From the repo root in any Windows shell:
 
-- On WSL, Linux, or macOS:
-  - work on `app/`, `lib/`, docs, and shared plugin source
-  - run the broker and UI locally with `npm run dev`
-- On Windows:
-  - open the same repo when working with Logitech's toolkit and device runtime
-  - use `plugins/consentkey-actions-windows/` for the generated wrapper project
-  - keep the shared logic in `plugins/consentkey-actions/`
+```bash
+consent-run kubectl rollout restart deploy/auth-service -n prod
+```
 
-Recommended flow:
-1. Build and review product logic in the shared repo.
-2. On Windows, generate the Logitech toolkit wrapper in `plugins/consentkey-actions-windows/`.
-3. Copy or sync the shared `src/` implementation from `plugins/consentkey-actions/` into that wrapper project.
-4. Test against Logi Options+ and MX Creative Console on Windows.
+The CLI submits the action to the broker, prints a consent card, waits for a hardware decision, and either prints `403 Consent Required` (exit 1) on deny or executes the approved command (exit 0).
 
-Practical note:
-- Opening the same repo from Windows is fine.
-- If Logitech file watching or plugin linking behaves poorly against the WSL filesystem path, keep the repository structure the same but use a native Windows checkout for runtime testing.
+See [agents/README.md](agents/README.md) for flags, scenario matching, and honesty notes about the stubbed execution layer.
+
+## Category fit
+
+Logitech Dev Studio 2026 track: `MX Creative Console + MX Master 4 & Actions Ring: Innovate with the Actions SDK`.
+
+The current scope intentionally centers `MX Creative Console + Actions Ring`. `MX Master 4` is framed as a natural future extension (pointer-tip interaction at the point of consent) rather than a present requirement.
+
+## Broker implementation notes
+
+- The broker is an in-memory state machine in `lib/consent-broker.ts`.
+- A single active request is allowed at a time; concurrent `request` POSTs return `409`.
+- Approved decisions produce a `ck_demo_<hash>_<nonce>` token. In production this would be a signed short-lived JWT with claims (action hash, device serial, policy id, expiry); the demo token is a visible string and does not enforce a real expiry.
+- Both the plugin and `consent-run` honour the `CONSENTKEY_BROKER_URL` env var; default `http://127.0.0.1:3000`.
+- `/api/consent/state` is declared `export const dynamic = "force-dynamic"` and sent with `cache-control: no-store` so polling clients always see fresh state.

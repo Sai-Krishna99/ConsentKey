@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Git Bash / WSL / macOS / Linux wrapper for consent-run.
+# Windows cmd.exe / PowerShell use consent-run.cmd instead.
+node "$(dirname "$0")/agents/consent-run.mjs" "$@"
